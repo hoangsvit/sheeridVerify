@@ -11,6 +11,7 @@
 - [快速开始](#快速开始)
 - [工作台与接口说明](#使用)
 - [Linux / Instabox 部署、更新与排错](docs/DEPLOYMENT.md)
+- [Web 任务历史持久化与重启安全说明](docs/PERSISTENCE.md)
 - [浏览器流程说明](docs/browser-workflow.md)
 - [贡献指南](CONTRIBUTING.md) · [安全说明](SECURITY.md) · [免责声明](DISCLAIMER.md)
 
