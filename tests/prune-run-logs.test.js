@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, writeFile, readFile, symlink, utimes, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, symlink, utimes, unlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pruneRunLogs } from '../scripts/prune-run-logs.js';
@@ -28,6 +28,10 @@ test('Retention defaults to dry-run; only expired run-result JSON is deleted wit
   assert.deepEqual(await pruneRunLogs({ dir: root, now, days: 30 }),
     { scanned: 2, expired: 1, deleted: 0, dryRun: true });
   assert.equal(await readFile(join(root, oldName), 'utf8'), 'private metadata');
+  const taskLock = 'a'.repeat(64) + '.lock';
+  await writeFile(join(root, taskLock), 'active task');
+  await assert.rejects(pruneRunLogs({ dir: root, now, days: 30, apply: true }), /active task lock/);
+  await unlink(join(root, taskLock));
   assert.deepEqual(await pruneRunLogs({ dir: root, now, days: 30, apply: true }),
     { scanned: 2, expired: 1, deleted: 1, dryRun: false });
   await assert.rejects(readFile(join(root, oldName)), { code: 'ENOENT' });
