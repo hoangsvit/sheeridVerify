@@ -17,6 +17,11 @@ export async function pruneRunLogs({ dir = '.runs', days = 30, apply = false, no
     if (error.code === 'ENOENT') return { scanned: 0, expired: 0, deleted: 0, dryRun: !apply };
     throw error;
   }
+  // Never prune while a workflow might still be writing its run result.
+  // Task locks use SHA-256 identities; a stale lock must be resolved manually.
+  if (apply && names.some(name => /^[a-f0-9]{64}\\.lock$/i.test(name))) {
+    throw new Error('active task lock present; stop jobs and inspect stale locks before pruning');
+  }
   const before = now - days * DAY;
   let scanned = 0, expired = 0, deleted = 0;
   for (const name of names) {
