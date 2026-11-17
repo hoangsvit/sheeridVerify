@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { AutomationError, requireValue } from '../core/errors.js';
 import { WebJobs } from './jobs.js';
+import { LoginThrottle } from './login-throttle.js';
 import { isMainModule } from '../../scripts/process.js';
 
 const assets = new Map([
@@ -23,6 +24,8 @@ export function createWebServer({ port = 8787, host = '127.0.0.1', publicOrigin,
       && published.pathname === '/' && !published.search && !published.hash, '公网地址必须为 HTTPS 域名');
   }
   requireValue(typeof password === 'string' && password.length > 0, '访问密码不能为空');
+  requireValue(!published || (password.length >= 12 && password !== 'JenkinWoo'),
+    '公网部署需要至少 12 位的独立密码，禁止使用默认密码');
   requireValue(host !== '0.0.0.0' || published, '公网监听需要配置 HTTPS 访问地址');
   const digest = value => createHash('sha256').update(value).digest();
   const expectedPassword = digest(password);
@@ -30,6 +33,7 @@ export function createWebServer({ port = 8787, host = '127.0.0.1', publicOrigin,
   const expectedSession = digest(sessionKey);
   const token = randomBytes(32).toString('hex');
   const jobs = new WebJobs({ configFile, workflow });
+  const loginThrottle = new LoginThrottle();
   let origin;
   const server = createServer((request, response) => {
     handle(request, response).catch(error => {
@@ -78,12 +82,25 @@ export function createWebServer({ port = 8787, host = '127.0.0.1', publicOrigin,
     }
     const cookie = (request.headers.cookie ?? '').split(';').map(item => item.trim())
       .find(item => item.startsWith('one-session='))?.slice('one-session='.length) ?? '';
-    const passwordValid = timingSafeEqual(expectedPassword, digest(request.headers['x-web-password'] ?? ''));
+    // Rate-limit credential guesses by the actual TCP peer, never by spoofable
+    // X-Forwarded-For headers. Existing authenticated sessions remain usable.
+    const client = request.socket.remoteAddress ?? 'unknown';
     const sessionValid = timingSafeEqual(expectedSession, digest(cookie));
+    if (!sessionValid) {
+      const retryAfter = loginThrottle.retryAfterSeconds(client);
+      if (retryAfter > 0) {
+        response.setHeader('Retry-After', String(retryAfter));
+        json(response, 429, { error: { code: 'LOGIN_RATE_LIMITED', message: '登录尝试过多，请稍后重试' } });
+        return;
+      }
+    }
+    const passwordValid = timingSafeEqual(expectedPassword, digest(request.headers['x-web-password'] ?? ''));
     if (!passwordValid && !sessionValid) {
+      loginThrottle.failure(client);
       json(response, 401, { error: { code: 'UNAUTHORIZED', message: '请输入正确的访问密码' } });
       return;
     }
+    if (passwordValid) loginThrottle.success(client);
     authorize(request, request.method !== 'GET');
     if (request.method === 'GET' && url.pathname === '/api/session') {
       if (passwordValid) response.setHeader('Set-Cookie', `one-session=${sessionKey}; Path=/; HttpOnly; SameSite=Strict${published ? '; Secure' : ''}`);
