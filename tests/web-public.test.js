@@ -11,6 +11,8 @@ test('Public deployment requires a nonempty password and an explicit HTTPS origi
   assert.throws(() => createWebServer({ host: '0.0.0.0', publicOrigin, password: '' }), { code: 'INVALID_CONFIG' });
   assert.throws(() => createWebServer({ host: '0.0.0.0', password }), { code: 'INVALID_CONFIG' });
   assert.throws(() => createWebServer({ publicOrigin: 'http://workspace.example.com', password }), { code: 'INVALID_CONFIG' });
+  assert.throws(() => createWebServer({ host: '0.0.0.0', publicOrigin, password: 'JenkinWoo' }), { code: 'INVALID_CONFIG' });
+  assert.throws(() => createWebServer({ host: '0.0.0.0', publicOrigin, password: 'short' }), { code: 'INVALID_CONFIG' });
 });
 
 test('Public HTTPS origin authenticates, keeps CSRF protections and supports queue requests', async t => {
@@ -65,4 +67,22 @@ test('Public HTTPS origin authenticates, keeps CSRF protections and supports que
   assert.equal((await call('/api/jobs', { ...headers, Host: 'evil.example' })).status, 403);
   assert.equal((await call('/api/jobs', { ...headers, 'Sec-Fetch-Site': 'cross-site' }, body)).status, 403);
   assert.equal((await call('/config/sheerid.local.json', { 'X-Web-Password': password })).status, 404);
+});
+
+
+test('API login rejects repeated guesses with 429 and Retry-After; session remains usable', async t => {
+  const { configFile } = await webConfig(t);
+  const app = createWebServer({ port: 0, password, configFile });
+  const origin = await app.start();
+  t.after(() => app.close());
+  const call = (headers = {}) => fetch(origin + '/api/session', { headers });
+  const good = await call({ 'X-Web-Password': password });
+  assert.equal(good.status, 200);
+  const cookie = good.headers.get('set-cookie').split(';')[0];
+  for (let i = 0; i < 5; i++) assert.equal((await call({ 'X-Web-Password': 'wrong' })).status, 401);
+  const limited = await call({ 'X-Web-Password': password, 'X-Forwarded-For': '198.51.100.123' });
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('retry-after')) > 0);
+  assert.equal((await call({ Cookie: cookie })).status, 200);
+  assert.equal((await fetch(origin + '/')).status, 200);
 });
