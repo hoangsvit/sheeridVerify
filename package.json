@@ -10,7 +10,8 @@
     "web": "node src/web/server.js",
     "status": "node src/cli.js --status",
     "submit": "node src/cli.js --submit",
-    "browser:install": "node scripts/install-browser.js"
+    "browser:install": "node scripts/install-browser.js",
+    "history:prune": "node scripts/prune-run-logs.js"
   },
   "keywords": [],
   "author": "JenkinWoo",
