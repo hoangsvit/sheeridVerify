@@ -144,7 +144,7 @@ Web 默认仅监听本机，不把完整配置返回前端，也不持久保存�
 
 程序目录为 `/data/workspace/one`，使用 Node.js 22+，运行 `npm ci` 和 `npm run browser:install` 安装依赖及对应平台的 Camoufox。Linux 有界面浏览器使用 `DISPLAY=:1`，可在 instabox 的 Computer 标签中查看和操作；个人配置仍使用 `config/sheerid.local.json`。
 
-公网部署设置 `ONE_WEB_HOST=0.0.0.0`、`ONE_WEB_PUBLIC_ORIGIN=https://你的域名`，可用 `ONE_WEB_PASSWORD` 覆盖默认访问密码 `JenkinWoo`。不再使用 `ONE_WEB_USER` 或 HTTP Basic 登录；网页可直接打开，在表单的“访问密码”中输入密码即可。API 校验密码或会话 Cookie，并继续检查来源和写请求令牌。公网必须使用 HTTPS 入口；未配置监听环境变量时仍只监听本机。密码校验成功后设置 HttpOnly、SameSite=Strict 的会话 Cookie（公网额外设置 Secure），刷新页面无需重复输入；服务重启后需重新验证。
+公网部署设置 `ONE_WEB_HOST=0.0.0.0`、`ONE_WEB_PUBLIC_ORIGIN=https://你的域名`，并**必须**通过 `ONE_WEB_PASSWORD` 设置至少 12 位的独立密码；默认密码 `JenkinWoo` 不允许用于公网入口。连续 5 次登录失败后，同一 TCP 客户端会被限制 15 分钟（HTTP 429 / `Retry-After`）。反向代理环境请在代理层另设 IP 访问控制和限流。不再使用 `ONE_WEB_USER` 或 HTTP Basic 登录；网页可直接打开，在表单的“访问密码”中输入密码即可。API 校验密码或会话 Cookie，并继续检查来源和写请求令牌。公网必须使用 HTTPS 入口；未配置监听环境变量时仍只监听本机。密码校验成功后设置 HttpOnly、SameSite=Strict 的会话 Cookie（公网额外设置 Secure），刷新页面无需重复输入；服务重启后需重新验证。
 
 直接调用接口时，向 `GET /api/session` 发送 `X-Web-Password: JenkinWoo`（自定义密码时替换），保存返回的 `token`。后续 API 请求携带该密码头或返回的会话 Cookie；创建、停止、恢复、删除任务还需携带 `X-Local-Token: token`。默认密码仅存在于后端，页面不会预填密码。
 
